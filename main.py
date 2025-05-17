@@ -16,4 +16,4 @@ for cog in initial_cogs:
     bot.load_extension(cog)
 
 keep_alive()
-bot.run("MTMyMjU4MTY5OTM4MDM3OTcwOQ.GKlLwQ.etdel8puXKDzZL-TXARzzjzgxnX3L8sp1bMVT8")
+bot.run(os.getenv("DISCORD_TOKEN"))
