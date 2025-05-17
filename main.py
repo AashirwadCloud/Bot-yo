@@ -21,6 +21,7 @@ feature_status = {
 }
 
 # Dashboard password system
+OWNER_ID = 1244871880012206161
 OWNER_ID = 1217747285463531522  # Replace with your user ID
 DASHBOARD_PASSWORD = "XD"  # Change this password
 
