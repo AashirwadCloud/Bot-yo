@@ -26,8 +26,8 @@ feature_status = {
 }
 
 # Dashboard access
-OWNER_ID = 123456789012345678  # Replace with your ID
-FRIEND_ID = 987654321098765432  # Replace with your friend's ID
+OWNER_ID = 1217747285463531522 # Replace with your ID
+FRIEND_ID = 1244871880012206161  # Replace with your friend's ID
 ALLOWED_USERS = [OWNER_ID, FRIEND_ID]
 DASHBOARD_PASSWORD = "secret"  # Change this password
 
