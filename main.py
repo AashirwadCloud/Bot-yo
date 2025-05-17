@@ -25,7 +25,7 @@ feature_status = {
     "auto_moderation": True,
     "fun_commands": False,
     "utility_tools": False,
-    "anime": False
+    "anime": true
 }
 
 # Dashboard access
