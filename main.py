@@ -71,7 +71,7 @@ async def unmute(ctx, member: discord.Member):
 # Ticket Setup
 @bot.command()
 @commands.has_permissions(administrator=True)
-async def ticketsetup(ctx):
+async def ticket(ctx):
     if feature_status["maintenance"]: return await ctx.send("🛠 Maintenance mode.")
     message = await ctx.send("📩 Click the button below to create a ticket.")
 
@@ -83,7 +83,7 @@ async def ticketsetup(ctx):
                 interaction.user: discord.PermissionOverwrite(read_messages=True)
             }
             channel = await ctx.guild.create_text_channel(f"ticket-{interaction.user.name}", overwrites=overwrites)
-            await channel.send(f"🎫 Hello {interaction.user.mention}, support will assist you shortly.")
+            await channel.send(f"🎫 Hello {interaction.user.mention}, be patient. Our staff will be seen your ticket.")
 
     await message.edit(view=TicketButton())
 
@@ -93,17 +93,17 @@ async def aternos_status(ctx, ip="yourserver.aternos.me"):
     if feature_status["maintenance"]: return await ctx.send("🛠 Maintenance mode.")
     try:
         socket.gethostbyname(ip)
-        await ctx.send(f"🟢 Aternos Server `{ip}` is ONLINE (ping successful).")
+        await ctx.send(f"🟢  Server `{ip}` is ONLINE *** You Can Play ***.")
     except socket.error:
-        await ctx.send(f"🔴 Aternos Server `{ip}` is OFFLINE or unreachable.")
+        await ctx.send(f"🔴 Aternos Server `{ip}` is OFFLINE You Can't Play.")
 
 # Dashboard Command (password-protected)
 @bot.command()
 async def dashboard(ctx):
     if ctx.author.id != OWNER_ID:
-        return await ctx.send("❌ You are not allowed to access the dashboard.")
+        return await ctx.send("❌ You Are Not Admin.")
     
-    await ctx.send("🔐 Please enter the dashboard password:")
+    await ctx.send("🔐 Pls Enter You Dash PassWord")
 
     def check(msg):
         return msg.author == ctx.author and msg.channel == ctx.channel
@@ -132,7 +132,7 @@ async def dashboard(ctx):
                 return await interaction.response.send_message("❌ Unauthorized", ephemeral=True)
             feature_status[self.feature] = not feature_status[self.feature]
             await interaction.response.edit_message(embed=discord.Embed(
-                title="🛠 Bot Dashboard (Updated)",
+                title="🛠 Bot Dashboard (V1)",
                 description="Toggle features below",
                 color=0x00ff00
             ).add_field(name="Welcome Message", value=str(feature_status["welcome"]), inline=False)
