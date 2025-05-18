@@ -19,7 +19,7 @@ async def on_ready():
 # Feature toggles
 feature_status = {
     "welcome": True,
-    "maintenance": False,
+    "maintenance": True,
     "reaction_roles": True,
     "economy": True,
     "auto_moderation": True,
