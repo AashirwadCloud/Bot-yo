@@ -15,7 +15,7 @@ async def on_ready():
     await bot.change_presence(status=discord.Status.dnd)
     print(f"✅ Bot is online as {bot.user}")
 
-# Feature toggles
+# === Configuration ===
 feature_status = {
     "welcome": True,
     "maintenance": True,
@@ -33,19 +33,29 @@ ALLOWED_USERS = [OWNER_ID, FRIEND_ID]
 DASHBOARD_PASSWORD = "XD"
 
 eco_data = {}
-def save_data():
+zoo_data = {}
+
+# === Load & Save ===
+def save_all_data():
     with open("economy.json", "w") as f:
         json.dump(eco_data, f)
+    with open("zoo.json", "w") as f:
+        json.dump(zoo_data, f)
 
-def load_data():
-    global eco_data
+def load_all_data():
+    global eco_data, zoo_data
     try:
         with open("economy.json", "r") as f:
             eco_data = json.load(f)
     except:
         eco_data = {}
+    try:
+        with open("zoo.json", "r") as f:
+            zoo_data = json.load(f)
+    except:
+        zoo_data = {}
 
-load_data()
+load_all_data()
 
 bad_words = ["badword1", "badword2"]
 
@@ -66,6 +76,20 @@ async def on_member_join(member):
         if channel:
             await channel.send(f"👋 Welcome {member.mention}!")
 
+# === Help Command ===
+@bot.command()
+async def help(ctx):
+    embed = discord.Embed(title="📘 Help Menu", description="List of available commands", color=0x00ffcc)
+    embed.add_field(name="Moderation", value="`ban`, `kick`, `mute`, `unmute`", inline=False)
+    embed.add_field(name="Utilities", value="`ping`, `aternos_status`", inline=False)
+    embed.add_field(name="Economy", value="`daily`, `balance`, `sell`", inline=False)
+    embed.add_field(name="Fun Games", value="`hunt`, `zoo`, `inventory`", inline=False)
+    embed.add_field(name="Setup", value="`ticketsetup`, `reactionrole`", inline=False)
+    embed.add_field(name="Dashboard", value="`dashboard`", inline=False)
+    embed.set_footer(text="Made by AASHIRWADGAMINGXD")
+    await ctx.send(embed=embed)
+
+# === Moderation Commands ===
 @bot.command()
 @commands.has_permissions(ban_members=True)
 async def ban(ctx, member: discord.Member, *, reason="No reason provided"):
@@ -101,6 +125,7 @@ async def unmute(ctx, member: discord.Member):
         await member.remove_roles(muted_role)
         await ctx.send(f"🔊 {member} has been unmuted.")
 
+# === Ticket System ===
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def ticketsetup(ctx):
@@ -125,15 +150,7 @@ async def ticketsetup(ctx):
 
     await message.edit(view=TicketView())
 
-@bot.command()
-async def aternos_status(ctx, ip="yourserver.aternos.me"):
-    if feature_status["maintenance"]: return await ctx.send("🛠 Maintenance mode.")
-    try:
-        socket.gethostbyname(ip)
-        await ctx.send(f"🟢 Aternos Server `{ip}` is ONLINE (ping successful).")
-    except socket.error:
-        await ctx.send(f"🔴 Aternos Server `{ip}` is OFFLINE or unreachable.")
-
+# === Reaction Roles ===
 @bot.command()
 async def reactionrole(ctx, emoji: str, role: discord.Role, *, message_text: str):
     if not feature_status["reaction_roles"]:
@@ -149,47 +166,71 @@ async def reactionrole(ctx, emoji: str, role: discord.Role, *, message_text: str
             if member and role not in member.roles:
                 await member.add_roles(role)
 
+# === Utilities ===
 @bot.command()
 async def ping(ctx):
     latency = round(bot.latency * 1000)
     await ctx.send(f"🏓 Pong! `{latency}ms`")
 
 @bot.command()
+async def aternos_status(ctx, ip="yourserver.aternos.me"):
+    if feature_status["maintenance"]: return await ctx.send("🛠 Maintenance mode.")
+    try:
+        socket.gethostbyname(ip)
+        await ctx.send(f"🟢 Aternos Server `{ip}` is ONLINE (ping successful).")
+    except socket.error:
+        await ctx.send(f"🔴 Aternos Server `{ip}` is OFFLINE or unreachable.")
+
+# === Economy & Fun ===
+@bot.command()
 async def daily(ctx):
     if not feature_status["economy"]: return await ctx.send("❌ Economy is disabled.")
     user_id = str(ctx.author.id)
-    if user_id not in eco_data:
-        eco_data[user_id] = 0
     reward = random.randint(100, 500)
-    eco_data[user_id] += reward
-    save_data()
-    await ctx.send(f"💰 You received {reward} coins today!")
+    eco_data[user_id] = eco_data.get(user_id, 0) + reward
+    save_all_data()
+    await ctx.send(f"💰 You received {reward} cowoncy today!")
 
 @bot.command()
 async def balance(ctx):
     if not feature_status["economy"]: return await ctx.send("❌ Economy is disabled.")
-    user_id = str(ctx.author.id)
-    coins = eco_data.get(user_id, 0)
-    await ctx.send(f"💼 {ctx.author.mention}, you have `{coins}` coins.")
+    coins = eco_data.get(str(ctx.author.id), 0)
+    await ctx.send(f"💼 {ctx.author.mention}, you have `{coins}` cowoncy.")
 
-# FUN GAMES (OWO Style)
 @bot.command()
 async def hunt(ctx):
     if not feature_status["fun_commands"]: return await ctx.send("❌ Fun Games are disabled.")
     animals = ["🦊 fox", "🐻 bear", "🐰 rabbit", "🦁 lion", "🐺 wolf"]
     caught = random.choice(animals)
+    uid = str(ctx.author.id)
+    zoo_data.setdefault(uid, []).append(caught)
+    save_all_data()
     await ctx.send(f"🔫 You hunted and caught a {caught}!")
 
 @bot.command()
 async def sell(ctx):
     if not feature_status["fun_commands"]: return await ctx.send("❌ Fun Games are disabled.")
+    uid = str(ctx.author.id)
+    if uid not in zoo_data or not zoo_data[uid]:
+        return await ctx.send("❌ You have no animals to sell!")
+    sold_animal = zoo_data[uid].pop()
     reward = random.randint(50, 150)
-    user_id = str(ctx.author.id)
-    eco_data[user_id] = eco_data.get(user_id, 0) + reward
-    save_data()
-    await ctx.send(f"💵 You sold your catch and earned {reward} coins!")
+    eco_data[uid] = eco_data.get(uid, 0) + reward
+    save_all_data()
+    await ctx.send(f"💵 You sold a {sold_animal} and earned {reward} cowoncy!")
 
-# DASHBOARD
+@bot.command()
+async def zoo(ctx):
+    animals = zoo_data.get(str(ctx.author.id), [])
+    if not animals:
+        return await ctx.send("🦙 Your zoo is empty!")
+    await ctx.send(f"🦁 Your zoo: {', '.join(animals)}")
+
+@bot.command()
+async def inventory(ctx):
+    await zoo(ctx)
+
+# === Dashboard ===
 @bot.command()
 async def dashboard(ctx):
     if ctx.author.id not in ALLOWED_USERS:
@@ -197,8 +238,7 @@ async def dashboard(ctx):
 
     await ctx.send("🔐 Please enter the dashboard password:")
 
-    def check(msg):
-        return msg.author == ctx.author and msg.channel == ctx.channel
+    def check(msg): return msg.author == ctx.author and msg.channel == ctx.channel
 
     try:
         msg = await bot.wait_for("message", check=check, timeout=30)
@@ -221,8 +261,6 @@ async def dashboard(ctx):
             async def callback(interaction: discord.Interaction):
                 if interaction.user.id not in ALLOWED_USERS:
                     return await interaction.response.send_message("❌ Unauthorized", ephemeral=True)
-
-                # Special behavior for Anime
                 if key == "anime" and feature_status["anime"]:
                     role = discord.utils.get(interaction.guild.roles, name="Anime")
                     if not role:
@@ -232,8 +270,6 @@ async def dashboard(ctx):
                         await member.add_roles(role)
                         await interaction.response.send_message("✨ You got the Anime role!", ephemeral=True)
                         return
-
-                # Toggle Feature
                 feature_status[key] = not feature_status[key]
                 new_embed = build_dashboard_embed()
                 new_view = DashboardView()
@@ -246,8 +282,7 @@ async def dashboard(ctx):
         embed = discord.Embed(title="🛠 Bot Dashboard", description="Toggle bot features:", color=0x00ff00)
         for feature, status in feature_status.items():
             display = "🟢 Enabled" if status else "🔴 Disabled"
-            if feature == "anime":
-                display += " (Gives role)"
+            if feature == "anime": display += " (Gives role)"
             embed.add_field(name=feature.replace("_", " ").title(), value=display, inline=False)
         embed.set_footer(text="Made by AASHIRWADGAMINGXD")
         return embed
@@ -256,5 +291,5 @@ async def dashboard(ctx):
     view = DashboardView()
     await ctx.send(embed=embed, view=view)
 
-# RUN THE BOT
+# === Start Bot ===
 bot.run(os.getenv("TOKEN"))
