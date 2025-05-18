@@ -12,7 +12,7 @@ bot.remove_command("help")
 
 @bot.event
 async def on_ready():
-    await bot.change_presence(status=discord.Status.idl)
+    await bot.change_presence(status=discord.Status.dnd)
     print(f"✅ Bot is online as {bot.user}")
 
 # === Configuration ===
