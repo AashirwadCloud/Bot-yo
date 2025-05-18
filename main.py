@@ -57,7 +57,7 @@ def load_all_data():
 
 load_all_data()
 
-bad_words = ["badword1", "badword2"]
+bad_words = ["teri maa ki", "bsk","mck","lund","bsp"]
 
 @bot.event
 async def on_message(message):
