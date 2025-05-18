@@ -17,12 +17,12 @@ async def on_ready():
 
 # === Configuration ===
 feature_status = {
-    "welcome": True,
-    "maintenance": True,
+    "welcome": False,
+    "maintenance": False,
     "reaction_roles": True,
-    "economy": True,
+    "economy": False,
     "auto_moderation": True,
-    "fun_commands": True,
+    "fun_commands": False,
     "utility_tools": False,
     "anime": True
 }
@@ -30,7 +30,7 @@ feature_status = {
 OWNER_ID = 1217747285463531522
 FRIEND_ID = 1244871880012206161
 ALLOWED_USERS = [OWNER_ID, FRIEND_ID]
-DASHBOARD_PASSWORD = "XD"
+DASHBOARD_PASSWORD = "1Year"
 
 eco_data = {}
 zoo_data = {}
@@ -65,7 +65,7 @@ async def on_message(message):
         for word in bad_words:
             if word in message.content.lower():
                 await message.delete()
-                await message.channel.send(f"🚫 {message.author.mention}, watch your language!")
+                await message.channel.send(f"🚫 {message.author.mention},Don't abuse Othwise You Get Timeout")
                 return
     await bot.process_commands(message)
 
@@ -189,7 +189,7 @@ async def daily(ctx):
     reward = random.randint(100, 500)
     eco_data[user_id] = eco_data.get(user_id, 0) + reward
     save_all_data()
-    await ctx.send(f"💰 You received {reward} cowoncy today!")
+    await ctx.send(f"💰 You received {reward} Coins today!")
 
 @bot.command()
 async def balance(ctx):
