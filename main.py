@@ -291,5 +291,15 @@ async def dashboard(ctx):
     view = DashboardView()
     await ctx.send(embed=embed, view=view)
 
+# === Role Restriction ===
+@bot.event
+async def on_guild_role_create(role):
+    restricted_names = ["indian army", "pakistan army"]
+    if role.name.lower() in restricted_names:
+        await role.delete()
+        channel = discord.utils.get(role.guild.text_channels, name="general")
+        if channel:
+            await channel.send(f"🚫 Role `{role.name}` is not allowed and has been deleted.")
+
 # === Start Bot ===
 bot.run(os.getenv("TOKEN"))
