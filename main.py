@@ -34,13 +34,13 @@ DASHBOARD_PASSWORD = "1Year"
 
 eco_data = {}
 zoo_data = {}
+afk_data = {}
 
 bad_words = ["teri maa ki", "bsk", "mck", "lund", "bsp"]
 vc_bad_words = ["bc", "mc", "bsdk", "madarchod", "bhosdike"]
 
 RULES_TEXT = """
 **⚠️ SERVER RULES ⚠️**
-
 1. Be respectful — No harassment, hate speech, racism, false rumors, sexism, trolling or drama.
 2. No NSFW — Don’t post NSFW content anywhere.
 3. Don’t beg — No begging for nitro, roles, etc.
@@ -53,9 +53,7 @@ RULES_TEXT = """
 10. Don’t abuse or use bad words in VC.
 11. No Discord crash GIFs or anything harmful.
 12. Avoid religious/family condition discussions (except well wishes).
-
 Caught breaking rules? Screenshot & report to staff.
-
 **🚫 BREAKING RULES = BAN | KICK**
 || By AashirwadGamingXD ||
 """
@@ -87,19 +85,28 @@ async def on_message(message):
     if message.author.bot:
         return
 
+    # Auto moderation
     if feature_status["auto_moderation"]:
         for word in bad_words:
             if word in message.content.lower():
                 await message.delete()
                 await message.channel.send(f"🚫 {message.author.mention}, Don't abuse or you will be timed out.")
                 return
-
         if message.channel.type == discord.ChannelType.voice:
             for word in vc_bad_words:
                 if word in message.content.lower():
                     await message.delete()
                     await message.channel.send(f"🚫 {message.author.mention}, abusive language in VC is prohibited.")
                     return
+
+    # AFK Notify
+    for mention in message.mentions:
+        if mention.id in afk_data:
+            await message.channel.send(f"💤 {mention.display_name} is AFK: {afk_data[mention.id]}")
+
+    if message.author.id in afk_data:
+        del afk_data[message.author.id]
+        await message.channel.send(f"👋 Welcome back {message.author.mention}, you are no longer AFK.")
 
     await bot.process_commands(message)
 
@@ -110,12 +117,12 @@ async def on_member_join(member):
         if channel:
             await channel.send(f"👋 Welcome {member.mention}!")
 
-# === Help Command ===
+# === Commands ===
 @bot.command()
 async def help(ctx):
     embed = discord.Embed(title="📘 Help Menu", description="List of available commands", color=0x00ffcc)
-    embed.add_field(name="Moderation", value="`ban`, `kick`, `mute`, `unmute`", inline=False)
-    embed.add_field(name="Utilities", value="`ping`, `aternos_status`", inline=False)
+    embed.add_field(name="Moderation", value="`ban`, `kick`, `mute`, `unmute`, `roleupdate`", inline=False)
+    embed.add_field(name="Utilities", value="`ping`, `aternos_status`, `afk`", inline=False)
     embed.add_field(name="Economy", value="`daily`, `balance`, `sell`", inline=False)
     embed.add_field(name="Fun Games", value="`hunt`, `zoo`, `inventory`", inline=False)
     embed.add_field(name="Setup", value="`ticketsetup`, `reactionrole`", inline=False)
@@ -124,12 +131,10 @@ async def help(ctx):
     embed.set_footer(text="Made by AASHIRWADGAMINGXD")
     await ctx.send(embed=embed)
 
-# === Rules Command ===
 @bot.command()
 async def rules(ctx):
     await ctx.send(RULES_TEXT)
 
-# === Moderation Commands ===
 @bot.command()
 @commands.has_permissions(ban_members=True)
 async def ban(ctx, member: discord.Member, *, reason="No reason provided"):
@@ -165,7 +170,6 @@ async def unmute(ctx, member: discord.Member):
         await member.remove_roles(muted_role)
         await ctx.send(f"🔊 {member} has been unmuted.")
 
-# === Ticket System ===
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def ticketsetup(ctx):
@@ -190,7 +194,6 @@ async def ticketsetup(ctx):
 
     await message.edit(view=TicketView())
 
-# === Reaction Roles ===
 @bot.command()
 async def reactionrole(ctx, emoji: str, role: discord.Role, *, message_text: str):
     if not feature_status["reaction_roles"]:
@@ -206,7 +209,6 @@ async def reactionrole(ctx, emoji: str, role: discord.Role, *, message_text: str
             if member and role not in member.roles:
                 await member.add_roles(role)
 
-# === Utilities ===
 @bot.command()
 async def ping(ctx):
     latency = round(bot.latency * 1000)
@@ -221,7 +223,6 @@ async def aternos_status(ctx, ip="yourserver.aternos.me"):
     except socket.error:
         await ctx.send(f"🔴 Aternos Server `{ip}` is OFFLINE or unreachable.")
 
-# === Economy & Fun ===
 @bot.command()
 async def daily(ctx):
     if not feature_status["economy"]: return await ctx.send("❌ Economy is disabled.")
@@ -270,7 +271,6 @@ async def zoo(ctx):
 async def inventory(ctx):
     await zoo(ctx)
 
-# === Dashboard ===
 @bot.command()
 async def dashboard(ctx):
     if ctx.author.id not in ALLOWED_USERS:
@@ -340,6 +340,22 @@ async def on_guild_role_create(role):
         channel = discord.utils.get(role.guild.text_channels, name="general")
         if channel:
             await channel.send(f"🚫 Role `{role.name}` is not allowed and has been deleted.")
+
+# === NEW: AFK Command ===
+@bot.command()
+async def afk(ctx, *, reason="AFK"):
+    afk_data[ctx.author.id] = reason
+    await ctx.send(f"💤 {ctx.author.mention} is now AFK: `{reason}`")
+
+# === NEW: Role Update Command ===
+@bot.command()
+@commands.has_permissions(manage_roles=True)
+async def roleupdate(ctx, role: discord.Role, new_name: str, hex_color: str):
+    try:
+        await role.edit(name=new_name, colour=discord.Colour(int(hex_color.replace("#", ""), 16)))
+        await ctx.send(f"✅ Role updated to `{new_name}` with color `{hex_color}`")
+    except Exception as e:
+        await ctx.send(f"❌ Error updating role: {e}")
 
 # === Start Bot ===
 bot.run(os.getenv("TOKEN"))
