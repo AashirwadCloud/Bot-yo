@@ -35,6 +35,31 @@ DASHBOARD_PASSWORD = "1Year"
 eco_data = {}
 zoo_data = {}
 
+bad_words = ["teri maa ki", "bsk", "mck", "lund", "bsp"]
+vc_bad_words = ["bc", "mc", "bsdk", "madarchod", "bhosdike"]
+
+RULES_TEXT = """
+**⚠️ SERVER RULES ⚠️**
+
+1. Be respectful — No harassment, hate speech, racism, false rumors, sexism, trolling or drama.
+2. No NSFW — Don’t post NSFW content anywhere.
+3. Don’t beg — No begging for nitro, roles, etc.
+4. Don’t spam — No message spam, emoji floods, or nickname spam.
+5. Use correct channels.
+6. No illegal content — Including grey market or pirated stuff.
+7. Listen to staff — Respect their decisions.
+8. Follow Discord’s Community Guidelines and Terms of Service.
+9. No self-promo or advertising.
+10. Don’t abuse or use bad words in VC.
+11. No Discord crash GIFs or anything harmful.
+12. Avoid religious/family condition discussions (except well wishes).
+
+Caught breaking rules? Screenshot & report to staff.
+
+**🚫 BREAKING RULES = BAN | KICK**
+|| By AashirwadGamingXD ||
+"""
+
 # === Load & Save ===
 def save_all_data():
     with open("economy.json", "w") as f:
@@ -57,16 +82,25 @@ def load_all_data():
 
 load_all_data()
 
-bad_words = ["teri maa ki", "bsk","mck","lund","bsp"]
-
 @bot.event
 async def on_message(message):
-    if feature_status["auto_moderation"] and not message.author.bot:
+    if message.author.bot:
+        return
+
+    if feature_status["auto_moderation"]:
         for word in bad_words:
             if word in message.content.lower():
                 await message.delete()
-                await message.channel.send(f"🚫 {message.author.mention},Don't abuse Othwise You Get Timeout")
+                await message.channel.send(f"🚫 {message.author.mention}, Don't abuse or you will be timed out.")
                 return
+
+        if message.channel.type == discord.ChannelType.voice:
+            for word in vc_bad_words:
+                if word in message.content.lower():
+                    await message.delete()
+                    await message.channel.send(f"🚫 {message.author.mention}, abusive language in VC is prohibited.")
+                    return
+
     await bot.process_commands(message)
 
 @bot.event
@@ -86,8 +120,14 @@ async def help(ctx):
     embed.add_field(name="Fun Games", value="`hunt`, `zoo`, `inventory`", inline=False)
     embed.add_field(name="Setup", value="`ticketsetup`, `reactionrole`", inline=False)
     embed.add_field(name="Dashboard", value="`dashboard`", inline=False)
+    embed.add_field(name="Rules", value="`rules`", inline=False)
     embed.set_footer(text="Made by AASHIRWADGAMINGXD")
     await ctx.send(embed=embed)
+
+# === Rules Command ===
+@bot.command()
+async def rules(ctx):
+    await ctx.send(RULES_TEXT)
 
 # === Moderation Commands ===
 @bot.command()
@@ -291,10 +331,10 @@ async def dashboard(ctx):
     view = DashboardView()
     await ctx.send(embed=embed, view=view)
 
-# === Role Restriction ===
+# === Role Restrictions ===
 @bot.event
 async def on_guild_role_create(role):
-    restricted_names = ["indian army", "pakistan army","Indian Army", "Pakistan Army","India army","pakistan army"]
+    restricted_names = ["indian army", "pakistan army", "india army"]
     if role.name.lower() in restricted_names:
         await role.delete()
         channel = discord.utils.get(role.guild.text_channels, name="general")
