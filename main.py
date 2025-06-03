@@ -129,21 +129,21 @@ async def rules(ctx):
 @bot.command()
 @commands.has_permissions(ban_members=True)
 async def ban(ctx, member: discord.Member, *, reason="No reason provided"):
-    if feature_status["maintenance"]: return await ctx.send("🛠 Maintenance mode.")
+    if feature_status["maintenance"]: return await ctx.send("Sorry Bot is Not Online")
     await member.ban(reason=reason)
     await ctx.send(f"🔨 {member} has been banned.")
 
 @bot.command()
 @commands.has_permissions(kick_members=True)
 async def kick(ctx, member: discord.Member, *, reason="No reason provided"):
-    if feature_status["maintenance"]: return await ctx.send("🛠 Maintenance mode.")
+    if feature_status["maintenance"]: return await ctx.send("Sorry Bot is Not Online")
     await member.kick(reason=reason)
     await ctx.send(f"👢 {member} has been kicked.")
 
 @bot.command()
 @commands.has_permissions(manage_roles=True)
 async def mute(ctx, member: discord.Member):
-    if feature_status["maintenance"]: return await ctx.send("🛠 Maintenance mode.")
+    if feature_status["maintenance"]: return await ctx.send("Sorry Bot is Not Online!")
     muted_role = discord.utils.get(ctx.guild.roles, name="Muted")
     if not muted_role:
         muted_role = await ctx.guild.create_role(name="Muted")
@@ -155,7 +155,7 @@ async def mute(ctx, member: discord.Member):
 @bot.command()
 @commands.has_permissions(manage_roles=True)
 async def unmute(ctx, member: discord.Member):
-    if feature_status["maintenance"]: return await ctx.send("🛠 Maintenance mode.")
+    if feature_status["maintenance"]: return await ctx.send("Sorry Bot is Not Online")
     muted_role = discord.utils.get(ctx.guild.roles, name="Muted")
     if muted_role in member.roles:
         await member.remove_roles(muted_role)
@@ -165,7 +165,7 @@ async def unmute(ctx, member: discord.Member):
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def ticketsetup(ctx):
-    if feature_status["maintenance"]: return await ctx.send("🛠 Maintenance mode.")
+    if feature_status["maintenance"]: return await ctx.send("Sorry Bot is Not Online")
     message = await ctx.send("📩 Click the button below to create a ticket.")
 
     class TicketView(discord.ui.View):
