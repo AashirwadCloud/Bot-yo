@@ -124,7 +124,7 @@ async def help(ctx):
 @bot.command()
 async def rules(ctx):
     await ctx.send(RULES_TEXT)
-
+    await ctx.send(By XD)
 # === Moderation Commands ===
 @bot.command()
 @commands.has_permissions(ban_members=True)
@@ -136,14 +136,14 @@ async def ban(ctx, member: discord.Member, *, reason="No reason provided"):
 @bot.command()
 @commands.has_permissions(kick_members=True)
 async def kick(ctx, member: discord.Member, *, reason="No reason provided"):
-    if feature_status["maintenance"]: return await ctx.send("Sorry Bot is Not Online")
+    if feature_status["maintenance"]: return await ctx.send("Sorry Bot in maintenance")
     await member.kick(reason=reason)
     await ctx.send(f"👢 {member} has been kicked.")
 
 @bot.command()
 @commands.has_permissions(manage_roles=True)
 async def mute(ctx, member: discord.Member):
-    if feature_status["maintenance"]: return await ctx.send("Sorry Bot is Not Online!")
+    if feature_status["maintenance"]: return await ctx.send("Sorry Bot in maintenance")
     muted_role = discord.utils.get(ctx.guild.roles, name="Muted")
     if not muted_role:
         muted_role = await ctx.guild.create_role(name="Muted")
@@ -155,7 +155,7 @@ async def mute(ctx, member: discord.Member):
 @bot.command()
 @commands.has_permissions(manage_roles=True)
 async def unmute(ctx, member: discord.Member):
-    if feature_status["maintenance"]: return await ctx.send("Sorry Bot is Not Online")
+    if feature_status["maintenance"]: return await ctx.send("Sorry Bot in maintenance")
     muted_role = discord.utils.get(ctx.guild.roles, name="Muted")
     if muted_role in member.roles:
         await member.remove_roles(muted_role)
@@ -165,7 +165,7 @@ async def unmute(ctx, member: discord.Member):
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def ticketsetup(ctx):
-    if feature_status["maintenance"]: return await ctx.send("Sorry Bot is Not Online")
+    if feature_status["maintenance"]: return await ctx.send("Sorry Bot in maintenance")
     message = await ctx.send("📩 Click the button below to create a ticket.")
 
     class TicketView(discord.ui.View):
@@ -210,7 +210,7 @@ async def ping(ctx):
 
 @bot.command()
 async def aternos_status(ctx, ip="yourserver.aternos.me"):
-    if feature_status["maintenance"]: return await ctx.send("🛠 Maintenance mode.")
+    if feature_status["maintenance"]: return await ctx.send("Sorry Bot in maintenance")
     try:
         socket.gethostbyname(ip)
         await ctx.send(f"🟢 Aternos Server `{ip}` is ONLINE (ping successful).")
