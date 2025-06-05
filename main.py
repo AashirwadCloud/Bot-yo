@@ -124,7 +124,7 @@ async def help(ctx):
 @bot.command()
 async def rules(ctx):
     await ctx.send(RULES_TEXT)
-    await ctx.send(By XD)
+    await ctx.send("By XD")
 # === Moderation Commands ===
 @bot.command()
 @commands.has_permissions(ban_members=True)
