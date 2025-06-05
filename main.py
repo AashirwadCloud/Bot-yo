@@ -36,7 +36,7 @@ eco_data = {}
 zoo_data = {}
 
 bad_words = ["teri maa ki", "bsk", "mck", "lund", "bsp"]
-vc_bad_words = ["bc", "mc", "bsdk", "madarchod", "bhosdike"]
+vc_bad_words = ["bc", "mc", "bsdk", "madarchod", "bhosdike" , "https://discord.gg"]
 
 RULES_TEXT = """
 **⚠️ SERVER RULES ⚠️**
@@ -54,7 +54,7 @@ RULES_TEXT = """
 12. Avoid religious/family condition discussions (except well wishes).
 Caught breaking rules? Screenshot & report to staff.
 **🚫 BREAKING RULES = BAN | KICK**
-|| @everyone @here ||
+||  ||
 """
 
 # === Load & Save ===
