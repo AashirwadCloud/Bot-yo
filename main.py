@@ -60,7 +60,7 @@ warn_data = load_json(WARNINGS_FILE, {})
 tickets = load_json(TICKETS_FILE, {})
 
 # Bad words for auto moderation
-bad_words = ["teri maa ki", "bsk", "mck", "lund", "bsp", "bc", "mc", "bsdk", "madarchod", "bhosdike"]
+bad_words = ["teri maa ki", "bsk", "mck", "lund", "bsp", "bc", "mc", "bsdk", "madarchod", "bhosdike" , "https://discord.gg"]
 vc_bad_words = ["https://discord.gg"]
 
 RULES_TEXT = """
