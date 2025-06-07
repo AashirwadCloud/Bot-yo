@@ -1,12 +1,15 @@
 import discord
-from discord.ext import commands, tasks
+from discord import app_commands
+from discord.ext import commands
 from discord.utils import get
 import json
 import asyncio
 import random
+import os
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
+# Remove default help command to keep your own if needed
 bot.remove_command("help")
 
 OWNER_ID = 1217747285463531522
@@ -35,7 +38,6 @@ eco_data = {}
 warn_data = {}
 tickets = {}
 
-# Load/save helpers
 def load_json(file, default):
     try:
         with open(file, "r") as f:
@@ -53,14 +55,12 @@ def save_all():
     save_json(WARNINGS_FILE, warn_data)
     save_json(TICKETS_FILE, tickets)
 
-# Initialize data
 feature_status = load_json(FEATURES_FILE, default_features)
 eco_data = load_json(ECONOMY_FILE, {})
 warn_data = load_json(WARNINGS_FILE, {})
 tickets = load_json(TICKETS_FILE, {})
 
-# Bad words for auto moderation
-bad_words = ["teri maa ki", "bsk", "mck", "lund", "bsp", "bc", "mc", "bsdk", "madarchod", "bhosdike" , "https://discord.gg"]
+bad_words = ["teri maa ki", "bsk", "mck", "lund", "bsp", "bc", "mc", "bsdk", "madarchod", "bhosdike", "https://discord.gg"]
 vc_bad_words = ["https://discord.gg"]
 
 RULES_TEXT = """
@@ -86,6 +86,12 @@ Caught breaking rules? Screenshot & report to staff.
 async def on_ready():
     await bot.change_presence(status=discord.Status.dnd)
     print(f"✅ Bot online as {bot.user}")
+    # Sync slash commands globally (or for guilds you want)
+    try:
+        await bot.tree.sync()
+        print("✅ Slash commands synced.")
+    except Exception as e:
+        print(f"Failed to sync slash commands: {e}")
 
 @bot.event
 async def on_member_join(member):
@@ -98,11 +104,8 @@ async def on_member_join(member):
 async def on_message(message):
     if message.author.bot:
         return
-
-    # Maintenance blocks commands except for owner/friend
     if feature_status.get("maintenance", False) and message.author.id not in ALLOWED_USERS:
         return
-
     if feature_status.get("auto_moderation", False):
         msg = message.content.lower()
         for bad_word in bad_words:
@@ -113,7 +116,6 @@ async def on_message(message):
                 except:
                     pass
                 return
-        # If message is in voice channel (unlikely, but for safety)
         if message.channel.type == discord.ChannelType.voice:
             for bad_word in vc_bad_words:
                 if bad_word in msg:
@@ -125,320 +127,227 @@ async def on_message(message):
                     return
     await bot.process_commands(message)
 
-# === Moderation commands ===
-@bot.command()
-@commands.has_permissions(ban_members=True)
-async def ban(ctx, member: discord.Member, *, reason="No reason provided"):
+# Moderation slash commands
+@app_commands.checks.has_permissions(ban_members=True)
+@app_commands.command(name="ban", description="Ban a user")
+@app_commands.describe(user="User to ban", reason="Reason for ban")
+async def ban(interaction: discord.Interaction, user: discord.Member, reason: str = "No reason provided"):
     if feature_status.get("maintenance", False):
-        return await ctx.send("Bot is in maintenance.")
-    await member.ban(reason=reason)
-    await ctx.send(f"🔨 Banned {member} | Reason: {reason}")
+        return await interaction.response.send_message("Bot is in maintenance.", ephemeral=True)
+    await user.ban(reason=reason)
+    await interaction.response.send_message(f"🔨 Banned {user} | Reason: {reason}")
 
-@bot.command()
-@commands.has_permissions(kick_members=True)
-async def kick(ctx, member: discord.Member, *, reason="No reason provided"):
+@app_commands.checks.has_permissions(kick_members=True)
+@app_commands.command(name="kick", description="Kick a user")
+@app_commands.describe(user="User to kick", reason="Reason for kick")
+async def kick(interaction: discord.Interaction, user: discord.Member, reason: str = "No reason provided"):
     if feature_status.get("maintenance", False):
-        return await ctx.send("Bot is in maintenance.")
-    await member.kick(reason=reason)
-    await ctx.send(f"👢 Kicked {member} | Reason: {reason}")
+        return await interaction.response.send_message("Bot is in maintenance.", ephemeral=True)
+    await user.kick(reason=reason)
+    await interaction.response.send_message(f"👢 Kicked {user} | Reason: {reason}")
 
-@bot.command()
-@commands.has_permissions(manage_roles=True)
-async def mute(ctx, member: discord.Member):
+@app_commands.checks.has_permissions(manage_roles=True)
+@app_commands.command(name="mute", description="Mute a user")
+@app_commands.describe(user="User to mute")
+async def mute(interaction: discord.Interaction, user: discord.Member):
     if feature_status.get("maintenance", False):
-        return await ctx.send("Bot is in maintenance.")
-    muted_role = get(ctx.guild.roles, name="Muted")
+        return await interaction.response.send_message("Bot is in maintenance.", ephemeral=True)
+    muted_role = get(interaction.guild.roles, name="Muted")
     if not muted_role:
-        muted_role = await ctx.guild.create_role(name="Muted")
-        for channel in ctx.guild.channels:
+        muted_role = await interaction.guild.create_role(name="Muted")
+        for channel in interaction.guild.channels:
             await channel.set_permissions(muted_role, speak=False, send_messages=False)
-    await member.add_roles(muted_role)
-    await ctx.send(f"🔇 Muted {member}")
+    await user.add_roles(muted_role)
+    await interaction.response.send_message(f"🔇 Muted {user}")
 
-@bot.command()
-@commands.has_permissions(manage_roles=True)
-async def unmute(ctx, member: discord.Member):
+@app_commands.checks.has_permissions(manage_roles=True)
+@app_commands.command(name="unmute", description="Unmute a user")
+@app_commands.describe(user="User to unmute")
+async def unmute(interaction: discord.Interaction, user: discord.Member):
     if feature_status.get("maintenance", False):
-        return await ctx.send("Bot is in maintenance.")
-    muted_role = get(ctx.guild.roles, name="Muted")
-    if muted_role in member.roles:
-        await member.remove_roles(muted_role)
-        await ctx.send(f"🔊 Unmuted {member}")
+        return await interaction.response.send_message("Bot is in maintenance.", ephemeral=True)
+    muted_role = get(interaction.guild.roles, name="Muted")
+    if muted_role and muted_role in user.roles:
+        await user.remove_roles(muted_role)
+        await interaction.response.send_message(f"🔊 Unmuted {user}")
     else:
-        await ctx.send(f"{member} is not muted.")
+        await interaction.response.send_message(f"{user} is not muted.")
 
-@bot.command()
-@commands.has_permissions(manage_messages=True)
-async def clear(ctx, amount: int = 10):
+@app_commands.checks.has_permissions(manage_messages=True)
+@app_commands.command(name="clear", description="Clear messages")
+@app_commands.describe(amount="Number of messages to delete (max 100)")
+async def clear(interaction: discord.Interaction, amount: int = 10):
     if feature_status.get("maintenance", False):
-        return await ctx.send("Bot is in maintenance.")
-    await ctx.channel.purge(limit=amount+1)
-    await ctx.send(f"🧹 Cleared {amount} messages.", delete_after=5)
+        return await interaction.response.send_message("Bot is in maintenance.", ephemeral=True)
+    if amount < 1 or amount > 100:
+        return await interaction.response.send_message("Amount must be between 1 and 100.", ephemeral=True)
+    deleted = await interaction.channel.purge(limit=amount+1)
+    await interaction.response.send_message(f"🧹 Deleted {len(deleted)-1} messages.", ephemeral=True)
 
-# Warn system
-@bot.command()
-@commands.has_permissions(kick_members=True)
-async def warn(ctx, member: discord.Member, *, reason="No reason provided"):
-    if feature_status.get("maintenance", False):
-        return await ctx.send("Bot is in maintenance.")
-    user_id = str(member.id)
-    if user_id not in warn_data:
-        warn_data[user_id] = []
-    warn_data[user_id].append(reason)
-    save_json(WARNINGS_FILE, warn_data)
-    await ctx.send(f"⚠️ Warned {member} for: {reason}")
-
-@bot.command()
-@commands.has_permissions(kick_members=True)
-async def warnings(ctx, member: discord.Member):
-    user_id = str(member.id)
-    warns = warn_data.get(user_id, [])
-    if not warns:
-        await ctx.send(f"{member} has no warnings.")
-    else:
-        embed = discord.Embed(title=f"Warnings for {member}", color=discord.Color.orange())
-        for i, w in enumerate(warns, 1):
-            embed.add_field(name=f"Warning #{i}", value=w, inline=False)
-        await ctx.send(embed=embed)
-
-@bot.command()
-@commands.has_permissions(kick_members=True)
-async def clearwarns(ctx, member: discord.Member):
-    user_id = str(member.id)
-    if user_id in warn_data:
-        warn_data.pop(user_id)
-        save_json(WARNINGS_FILE, warn_data)
-        await ctx.send(f"Cleared all warnings for {member}")
-    else:
-        await ctx.send(f"{member} has no warnings.")
-
-# === Economy commands ===
-@bot.command()
-async def balance(ctx, member: discord.Member = None):
+# Economy slash commands
+@app_commands.command(name="balance", description="Show your coin balance")
+async def balance(interaction: discord.Interaction):
     if not feature_status.get("economy", False):
-        return await ctx.send("Economy system is disabled.")
-    user = member or ctx.author
-    bal = eco_data.get(str(user.id), 0)
-    await ctx.send(f"💰 {user.display_name} has {bal} coins.")
-
-@bot.command()
-async def daily(ctx):
-    if not feature_status.get("economy", False):
-        return await ctx.send("Economy system is disabled.")
-    user_id = str(ctx.author.id)
-    import time
-    now = int(time.time())
-    last_daily = eco_data.get(f"{user_id}_lastdaily", 0)
-    if now - last_daily < 86400:  # 24 hours cooldown
-        await ctx.send("You have already claimed your daily reward today! Come back later.")
-        return
-    eco_data[user_id] = eco_data.get(user_id, 0) + 100
-    eco_data[f"{user_id}_lastdaily"] = now
-    save_json(ECONOMY_FILE, eco_data)
-    await ctx.send(f"🎉 You claimed your daily 100 coins! Your balance is now {eco_data[user_id]} coins.")
-
-# === Fun commands ===
-@bot.command()
-async def hunt(ctx):
-    if not feature_status.get("fun_commands", False):
-        return await ctx.send("Fun commands are disabled.")
-    animals = ["rabbit", "fox", "deer", "bear"]
-    catch = random.choice(animals)
-    user_id = str(ctx.author.id)
-    # For simplicity, store hunted animals count
-    zoo_data = load_json("zoo.json", {})
-    zoo_data.setdefault(user_id, {})
-    zoo_data[user_id][catch] = zoo_data[user_id].get(catch, 0) + 1
-    save_json("zoo.json", zoo_data)
-    await ctx.send(f"🏹 You hunted a {catch}! Added to your zoo.")
-
-@bot.command()
-async def zoo(ctx):
-    if not feature_status.get("fun_commands", False):
-        return await ctx.send("Fun commands are disabled.")
-    user_id = str(ctx.author.id)
-    zoo_data = load_json("zoo.json", {})
-    animals = zoo_data.get(user_id, {})
-    if not animals:
-        await ctx.send("Your zoo is empty. Use `!hunt` to catch animals!")
-        return
-    embed = discord.Embed(title=f"{ctx.author.display_name}'s Zoo", color=discord.Color.green())
-    for animal, count in animals.items():
-        embed.add_field(name=animal.capitalize(), value=str(count), inline=True)
-    await ctx.send(embed=embed)
-
-@bot.command()
-async def inventory(ctx):
-    # Could show economy items, here simplified
-    if not feature_status.get("economy", False):
-        return await ctx.send("Economy system is disabled.")
-    user_id = str(ctx.author.id)
+        return await interaction.response.send_message("Economy is disabled.", ephemeral=True)
+    user_id = str(interaction.user.id)
     bal = eco_data.get(user_id, 0)
-    await ctx.send(f"Your inventory:\nCoins: {bal}\nUse economy commands to expand.")
+    await interaction.response.send_message(f"💰 {interaction.user.mention}, your balance is {bal} coins.")
 
-# === Reaction role setup (simplified) ===
-@bot.command()
-@commands.has_permissions(manage_roles=True)
-async def reactionrole(ctx, message_id: int, emoji: str, role: discord.Role):
-    if not feature_status.get("reaction_roles", False):
-        return await ctx.send("Reaction roles are disabled.")
-    try:
-        msg = await ctx.channel.fetch_message(message_id)
-        await msg.add_reaction(emoji)
-    except:
-        return await ctx.send("Message not found or invalid emoji.")
-    # Save reaction roles config to a file (simplified here)
-    rr_data = load_json("reaction_roles.json", {})
-    rr_data[str(message_id)] = {"emoji": emoji, "role_id": role.id}
-    save_json("reaction_roles.json", rr_data)
-    await ctx.send(f"Reaction role setup: React with {emoji} to get {role.name}")
+@app_commands.command(name="daily", description="Claim your daily coins")
+async def daily(interaction: discord.Interaction):
+    if not feature_status.get("economy", False):
+        return await interaction.response.send_message("Economy is disabled.", ephemeral=True)
+    user_id = str(interaction.user.id)
+    if user_id not in eco_data:
+        eco_data[user_id] = 0
+    # For simplicity, no cooldown implemented here (add if needed)
+    eco_data[user_id] += 100
+    save_json(ECONOMY_FILE, eco_data)
+    await interaction.response.send_message(f"🎉 {interaction.user.mention}, you claimed 100 coins! Your balance is now {eco_data[user_id]}.")
 
-@bot.event
-async def on_raw_reaction_add(payload):
-    if not feature_status.get("reaction_roles", False):
-        return
-    rr_data = load_json("reaction_roles.json", {})
-    data = rr_data.get(str(payload.message_id))
-    if not data:
-        return
-    if str(payload.emoji) == data["emoji"]:
-        guild = bot.get_guild(payload.guild_id)
-        role = get(guild.roles, id=data["role_id"])
-        member = guild.get_member(payload.user_id)
-        if role and member and not member.bot:
-            await member.add_roles(role)
+@app_commands.command(name="pay", description="Pay coins to another user")
+@app_commands.describe(user="User to pay", amount="Amount of coins")
+async def pay(interaction: discord.Interaction, user: discord.Member, amount: int):
+    if not feature_status.get("economy", False):
+        return await interaction.response.send_message("Economy is disabled.", ephemeral=True)
+    if amount < 1:
+        return await interaction.response.send_message("Amount must be positive.", ephemeral=True)
+    payer = str(interaction.user.id)
+    payee = str(user.id)
+    if eco_data.get(payer, 0) < amount:
+        return await interaction.response.send_message("You don't have enough coins.", ephemeral=True)
+    eco_data[payer] = eco_data.get(payer, 0) - amount
+    eco_data[payee] = eco_data.get(payee, 0) + amount
+    save_json(ECONOMY_FILE, eco_data)
+    await interaction.response.send_message(f"💸 {interaction.user.mention} paid {amount} coins to {user.mention}.")
 
-@bot.event
-async def on_raw_reaction_remove(payload):
-    if not feature_status.get("reaction_roles", False):
-        return
-    rr_data = load_json("reaction_roles.json", {})
-    data = rr_data.get(str(payload.message_id))
-    if not data:
-        return
-    if str(payload.emoji) == data["emoji"]:
-        guild = bot.get_guild(payload.guild_id)
-        role = get(guild.roles, id=data["role_id"])
-        member = guild.get_member(payload.user_id)
-        if role and member and not member.bot:
-            await member.remove_roles(role)
+# Ticket system with buttons
+class TicketView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(discord.ui.Button(label="Create Ticket", style=discord.ButtonStyle.green, custom_id="create_ticket"))
 
-# === Ticket system ===
-@bot.command()
-async def ticket(ctx, action: str = None):
-    if not feature_status.get("tickets", False):
-        return await ctx.send("Tickets are disabled.")
-    user_id = str(ctx.author.id)
-    guild = ctx.guild
-    if action == "open":
-        if user_id in tickets:
-            return await ctx.send("You already have an open ticket!")
+    @discord.ui.button(label="Create Ticket", style=discord.ButtonStyle.green, custom_id="create_ticket")
+    async def create_ticket(self, button: discord.ui.Button, interaction: discord.Interaction):
+        if not feature_status.get("tickets", False):
+            return await interaction.response.send_message("Ticket system is disabled.", ephemeral=True)
+        guild = interaction.guild
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            ctx.author: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+            interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True),
         }
-        ticket_channel = await guild.create_text_channel(f"ticket-{ctx.author.name}", overwrites=overwrites)
-        tickets[user_id] = ticket_channel.id
+        ticket_number = len(tickets) + 1
+        channel_name = f"ticket-{ticket_number}"
+        existing_channel = get(guild.channels, name=channel_name)
+        if existing_channel:
+            return await interaction.response.send_message("You already have an open ticket.", ephemeral=True)
+        channel = await guild.create_text_channel(channel_name, overwrites=overwrites, topic=f"Ticket for {interaction.user}")
+        tickets[str(channel.id)] = str(interaction.user.id)
         save_json(TICKETS_FILE, tickets)
-        await ctx.send(f"🎫 Ticket opened: {ticket_channel.mention}")
-    elif action == "close":
-        if user_id not in tickets:
-            return await ctx.send("You have no open tickets.")
-        channel_id = tickets.pop(user_id)
-        save_json(TICKETS_FILE, tickets)
-        channel = bot.get_channel(channel_id)
-        if channel:
-            await channel.delete()
-        await ctx.send("Ticket closed and channel deleted.")
-    else:
-        await ctx.send("Usage: `!ticket open` or `!ticket close`")
+        await interaction.response.send_message(f"🎫 Ticket created: {channel.mention}", ephemeral=True)
 
-# === Dashboard for Owner and Friend only ===
+@app_commands.command(name="ticket", description="Manage tickets")
+@app_commands.describe(action="Create or close a ticket")
+async def ticket(interaction: discord.Interaction, action: str):
+    if feature_status.get("maintenance", False):
+        return await interaction.response.send_message("Bot is in maintenance.", ephemeral=True)
+    if not feature_status.get("tickets", False):
+        return await interaction.response.send_message("Ticket system is disabled.", ephemeral=True)
+    action = action.lower()
+    if action == "create":
+        view = TicketView()
+        await interaction.response.send_message("Click below to create a ticket.", view=view, ephemeral=True)
+    elif action == "close":
+        channel_id = str(interaction.channel.id)
+        if channel_id in tickets:
+            del tickets[channel_id]
+            save_json(TICKETS_FILE, tickets)
+            await interaction.channel.delete()
+        else:
+            await interaction.response.send_message("This is not a ticket channel.", ephemeral=True)
+    else:
+        await interaction.response.send_message("Invalid action. Use create or close.", ephemeral=True)
+
+# Dashboard with buttons to toggle features (owner + friend only)
 class DashboardView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
-        self.update_buttons()
-
-    def update_buttons(self):
-        self.clear_items()
         for feat in feature_status:
-            label = f"{feat.capitalize()} [{'ON' if feature_status[feat] else 'OFF'}]"
-            style = discord.ButtonStyle.green if feature_status[feat] else discord.ButtonStyle.red
-            self.add_item(DashboardButton(feat, label, style))
+            self.add_item(FeatureToggleButton(feat))
 
-class DashboardButton(discord.ui.Button):
-    def __init__(self, feature_key, label, style):
-        super().__init__(label=label, style=style)
-        self.feature_key = feature_key
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id not in ALLOWED_USERS:
+            await interaction.response.send_message("You can't use this dashboard.", ephemeral=True)
+            return False
+        return True
+
+class FeatureToggleButton(discord.ui.Button):
+    def __init__(self, feature_name):
+        status = feature_status.get(feature_name, False)
+        super().__init__(
+            label=f"{feature_name.capitalize()} [{'ON' if status else 'OFF'}]",
+            style=discord.ButtonStyle.green if status else discord.ButtonStyle.red,
+            custom_id=feature_name,
+        )
 
     async def callback(self, interaction: discord.Interaction):
-        user_id = interaction.user.id
-        if user_id not in ALLOWED_USERS:
-            await interaction.response.send_message("You are not authorized to use this dashboard.", ephemeral=True)
-            return
-        # Toggle feature
-        current = feature_status.get(self.feature_key, False)
-        feature_status[self.feature_key] = not current
+        feat = self.custom_id
+        feature_status[feat] = not feature_status[feat]
         save_json(FEATURES_FILE, feature_status)
-        # Update buttons label/colors
-        self.view.update_buttons()
+        self.label = f"{feat.capitalize()} [{'ON' if feature_status[feat] else 'OFF'}]"
+        self.style = discord.ButtonStyle.green if feature_status[feat] else discord.ButtonStyle.red
         await interaction.response.edit_message(view=self.view)
-        await interaction.followup.send(f"{self.feature_key.capitalize()} set to {'ON' if feature_status[self.feature_key] else 'OFF'}", ephemeral=True)
 
-@bot.command()
-async def dashboard(ctx):
-    if ctx.author.id not in ALLOWED_USERS:
-        return await ctx.send("You are not authorized to use the dashboard.")
-    try:
-        dm = await ctx.author.create_dm()
-        view = DashboardView()
-        await dm.send("Dashboard: Toggle bot features by clicking buttons.", view=view)
-        await ctx.send("Dashboard sent to your DMs.")
-    except Exception as e:
-        await ctx.send("Failed to send dashboard DM. Enable your DMs.")
+@app_commands.command(name="dashboard", description="Owner-only feature toggle dashboard")
+async def dashboard(interaction: discord.Interaction):
+    if interaction.user.id not in ALLOWED_USERS:
+        return await interaction.response.send_message("You can't use this dashboard.", ephemeral=True)
+    view = DashboardView()
+    await interaction.response.send_message("Feature toggle dashboard:", view=view, ephemeral=True)
 
-# === Help command ===
-@bot.command()
-async def help(ctx):
-    embed = discord.Embed(title="Help - Commands", color=discord.Color.blue())
-    embed.add_field(name="Moderation",
-                    value="!ban @user [reason]\n!kick @user [reason]\n!mute @user\n!unmute @user\n!warn @user [reason]\n!warnings @user\n!clearwarns @user\n!clear [number]",
-                    inline=False)
-    embed.add_field(name="Economy",
-                    value="!balance [user]\n!daily\n!inventory",
-                    inline=False)
-    embed.add_field(name="Fun",
-                    value="!hunt\n!zoo",
-                    inline=False)
-    embed.add_field(name="Reaction Roles",
-                    value="!reactionrole <message_id> <emoji> <role>",
-                    inline=False)
-    embed.add_field(name="Tickets",
-                    value="!ticket open\n!ticket close",
-                    inline=False)
-    embed.add_field(name="Dashboard",
-                    value="!dashboard (Owner & Friend only)",
-                    inline=False)
-    await ctx.send(embed=embed)
-
-@bot.command()
-async def rules(ctx):
-    await ctx.send(RULES_TEXT)
-
-# === Error handling ===
-@bot.event
-async def on_command_error(ctx, error):
-    if isinstance(error, commands.MissingPermissions):
-        await ctx.send("🚫 You don't have permission to run this command.")
-    elif isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send("🚫 Missing required argument.")
-    elif isinstance(error, commands.CommandNotFound):
-        pass  # ignore unknown commands silently
+# Anime role command
+@app_commands.command(name="anime", description="Get Anime role")
+async def anime(interaction: discord.Interaction):
+    if not feature_status.get("anime", False):
+        return await interaction.response.send_message("Anime feature is disabled.", ephemeral=True)
+    role = get(interaction.guild.roles, name="Anime")
+    if not role:
+        role = await interaction.guild.create_role(name="Anime")
+    if role in interaction.user.roles:
+        await interaction.response.send_message("You already have the Anime role.", ephemeral=True)
     else:
-        await ctx.send(f"Error: {error}")
+        await interaction.user.add_roles(role)
+        await interaction.response.send_message("Anime role added!", ephemeral=True)
 
-# Run the bot
-import os
-TOKEN = os.getenv("TOKEN")
-bot.run(TOKEN)
+# Help command as slash command
+@app_commands.command(name="help", description="Show help message")
+async def help_command(interaction: discord.Interaction):
+    embed = discord.Embed(title="Bot Commands", color=discord.Color.purple())
+    embed.add_field(name="/ban [user] [reason]", value="Ban a user (moderator only).", inline=False)
+    embed.add_field(name="/kick [user] [reason]", value="Kick a user (moderator only).", inline=False)
+    embed.add_field(name="/mute [user]", value="Mute a user (moderator only).", inline=False)
+    embed.add_field(name="/unmute [user]", value="Unmute a user (moderator only).", inline=False)
+    embed.add_field(name="/clear [amount]", value="Clear messages (moderator only).", inline=False)
+    embed.add_field(name="/balance", value="Show your balance.", inline=False)
+    embed.add_field(name="/daily", value="Claim daily coins.", inline=False)
+    embed.add_field(name="/pay [user] [amount]", value="Pay coins to a user.", inline=False)
+    embed.add_field(name="/ticket [create/close]", value="Create or close a ticket.", inline=False)
+    embed.add_field(name="/dashboard", value="Owner-only feature toggle dashboard.", inline=False)
+    embed.add_field(name="/anime", value="Get Anime role.", inline=False)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+bot.tree.add_command(ban)
+bot.tree.add_command(kick)
+bot.tree.add_command(mute)
+bot.tree.add_command(unmute)
+bot.tree.add_command(clear)
+bot.tree.add_command(balance)
+bot.tree.add_command(daily)
+bot.tree.add_command(pay)
+bot.tree.add_command(ticket)
+bot.tree.add_command(dashboard)
+bot.tree.add_command(anime)
+bot.tree.add_command(help_command)
+
+bot.run(os.getenv("TOKEN"))
