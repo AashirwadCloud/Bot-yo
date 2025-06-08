@@ -64,7 +64,6 @@ async def on_message(message):
     if feature_status.get("maintenance", False) and message.author.id not in ALLOWED_USERS:
         return
     bad_words = ["teri maa ki", "bsk", "mck", "lund", "bsp", "bc", "mc", "bsdk", "madarchod", "bhosdike", "https://discord.gg"]
-    vc_bad_words = ["bc" , "teri maa ki" ,"bsk","mck","lund",bcp"]
     if feature_status.get("auto_moderation", False):
         msg = message.content.lower()
         for bad_word in bad_words:
