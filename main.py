@@ -9,7 +9,7 @@ intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
 bot.remove_command("help")
 
-OWNER_ID = 67383894947474848
+OWNER_ID = 1217747285463531522
 FRIEND_ID =  78363839376373
 ALLOWED_USERS = [OWNER_ID, FRIEND_ID]
 
