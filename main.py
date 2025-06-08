@@ -230,7 +230,7 @@ async def dashboard(interaction: discord.Interaction):
 @app_commands.command(name="anime", description="Get Anime role")
 async def anime(interaction: discord.Interaction):
     if not feature_status.get("anime", False):
-        return await interaction.response.send_message"coming soon", ephemeral=True)
+        return await interaction.response.send_message"", ephemeral=True)
     role = get(interaction.guild.roles, name="Anime")
     if not role:
         role = await interaction.guild.create_role(name="Anime")
