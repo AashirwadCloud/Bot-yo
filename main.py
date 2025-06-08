@@ -10,7 +10,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 bot.remove_command("help")
 
 OWNER_ID = 1217747285463531522
-FRIEND_ID =  78363839376373
+FRIEND_ID = 1244871880012206161
 ALLOWED_USERS = [OWNER_ID, FRIEND_ID]
 
 FEATURES_FILE = "features.json"
@@ -64,6 +64,7 @@ async def on_message(message):
     if feature_status.get("maintenance", False) and message.author.id not in ALLOWED_USERS:
         return
     bad_words = ["teri maa ki", "bsk", "mck", "lund", "bsp", "bc", "mc", "bsdk", "madarchod", "bhosdike", "https://discord.gg"]
+    vc_bad_words = ["https://discord.gg"]
     if feature_status.get("auto_moderation", False):
         msg = message.content.lower()
         for bad_word in bad_words:
@@ -230,7 +231,7 @@ async def dashboard(interaction: discord.Interaction):
 @app_commands.command(name="anime", description="Get Anime role")
 async def anime(interaction: discord.Interaction):
     if not feature_status.get("anime", False):
-        return await interaction.response.send_message"", ephemeral=True)
+        return await interaction.response.send_message("Anime feature is disabled.", ephemeral=True)
     role = get(interaction.guild.roles, name="Anime")
     if not role:
         role = await interaction.guild.create_role(name="Anime")
@@ -289,7 +290,7 @@ async def reactionrole_add(interaction: discord.Interaction, message_id: str, em
 
 @app_commands.checks.has_permissions(manage_roles=True)
 @app_commands.command(name="reactionrole_remove", description="Remove reaction role from a message")
-@app_commands.describe(message_id="Message ID", emoji="Reaction to remove")
+@app_commands.describe(message_id="Message ID", emoji="Emoji to remove")
 async def reactionrole_remove(interaction: discord.Interaction, message_id: str, emoji: str):
     if not feature_status.get("reaction_roles", False):
         return await interaction.response.send_message("Reaction roles feature is disabled.", ephemeral=True)
