@@ -15,9 +15,7 @@ FRIEND_ID = 1244871880012206161
 ALLOWED_USERS = [OWNER_ID, FRIEND_ID]
 
 FEATURES_FILE = "features.json"
-RULES_FILE = "rules.json"
 feature_status = {}
-rules_data = {}
 
 default_features = {
     "welcome": True,
@@ -27,10 +25,10 @@ default_features = {
     "fun_commands": True,
     "utility_tools": True,
     "anime": True,
-    "tickets": True,
-    "maintenance_message": "🚧 The bot is under maintenance. Please try again later."
+    "tickets": True
 }
 
+# Load/save features
 def load_json(file, default):
     try:
         with open(file, "r") as f:
@@ -43,7 +41,11 @@ def save_json(file, data):
         json.dump(data, f, indent=4)
 
 feature_status = load_json(FEATURES_FILE, default_features)
-rules_data = load_json(RULES_FILE, {"rules": "No rules set yet."})
+
+# Maintenance message
+maintenance_message = "Bot is under maintenance."
+
+# --- Events ---
 
 @bot.event
 async def on_ready():
@@ -66,35 +68,29 @@ async def on_member_join(member):
 async def on_message(message):
     if message.author.bot:
         return
-
     if feature_status.get("maintenance", False) and message.author.id not in ALLOWED_USERS:
-        try:
-            await message.channel.send(feature_status.get("maintenance_message", "🚧 Maintenance mode is on."))
-        except:
-            pass
-        return
-
-    bad_words = ["teri maa ki", "bsk", "mck", "lund", "bsp", "bc", "mc", "bsdk", "madarchod", "bhosdike", "https://discord.gg"]
+        return await message.channel.send(maintenance_message)
     if feature_status.get("auto_moderation", False):
+        bad_words = ["teri maa ki", "bsk", "mck", "lund", "bsp", "bc", "mc", "bsdk", "madarchod", "bhosdike", "https://discord.gg"]
         msg = message.content.lower()
-        for bad_word in bad_words:
-            if bad_word in msg:
+        for word in bad_words:
+            if word in msg:
                 try:
                     await message.delete()
                     await message.channel.send(f"🚫 {message.author.mention}, watch your language!")
                 except:
                     pass
                 return
-
     await bot.process_commands(message)
-# --- Moderation Commands ---
+
+# --- Slash Commands ---
 
 @app_commands.checks.has_permissions(ban_members=True)
 @app_commands.command(name="ban", description="Ban a user")
 @app_commands.describe(user="User to ban", reason="Reason for ban")
 async def ban(interaction: discord.Interaction, user: discord.Member, reason: str = "No reason provided"):
     if feature_status.get("maintenance", False):
-        return await interaction.response.send_message(feature_status["maintenance_message"], ephemeral=True)
+        return await interaction.response.send_message(maintenance_message, ephemeral=True)
     await user.ban(reason=reason)
     await interaction.response.send_message(f"🔨 Banned {user} | Reason: {reason}")
 
@@ -103,7 +99,7 @@ async def ban(interaction: discord.Interaction, user: discord.Member, reason: st
 @app_commands.describe(user="User to kick", reason="Reason for kick")
 async def kick(interaction: discord.Interaction, user: discord.Member, reason: str = "No reason provided"):
     if feature_status.get("maintenance", False):
-        return await interaction.response.send_message(feature_status["maintenance_message"], ephemeral=True)
+        return await interaction.response.send_message(maintenance_message, ephemeral=True)
     await user.kick(reason=reason)
     await interaction.response.send_message(f"👢 Kicked {user} | Reason: {reason}")
 
@@ -112,7 +108,7 @@ async def kick(interaction: discord.Interaction, user: discord.Member, reason: s
 @app_commands.describe(user="User to mute")
 async def mute(interaction: discord.Interaction, user: discord.Member):
     if feature_status.get("maintenance", False):
-        return await interaction.response.send_message(feature_status["maintenance_message"], ephemeral=True)
+        return await interaction.response.send_message(maintenance_message, ephemeral=True)
     muted_role = get(interaction.guild.roles, name="Muted")
     if not muted_role:
         muted_role = await interaction.guild.create_role(name="Muted")
@@ -141,120 +137,116 @@ async def clear(interaction: discord.Interaction, amount: int):
     deleted = await interaction.channel.purge(limit=amount)
     await interaction.response.send_message(f"🧹 Deleted {len(deleted)} messages.", ephemeral=True)
 
-# --- Text Command: Set & Show Rules ---
-
-@bot.command(name="setrules")
-@commands.is_owner()
-async def set_rules(ctx, *, rules: str):
-    rules_data["rules"] = rules
-    save_json(RULES_FILE, rules_data)
-    await ctx.send("✅ Rules have been updated.")
-
-@bot.command(name="rules")
-async def show_rules(ctx):
-    await ctx.send(f"📜 Server Rules:\n{rules_data.get('rules', 'No rules set.')}")
-
-# --- Text Command: Set Maintenance Message ---
-
-@bot.command(name="setmaintmsg")
-@commands.is_owner()
-async def set_maint_msg(ctx, *, message: str):
-    feature_status["maintenance_message"] = message
-    save_json(FEATURES_FILE, feature_status)
-    await ctx.send("✅ Maintenance message updated.")
-
-# --- Slash Command: Announce ---
-
 @app_commands.command(name="announce", description="Make a server-wide announcement")
-@app_commands.describe(message="The announcement message")
+@app_commands.describe(message="The message to announce")
 async def announce(interaction: discord.Interaction, message: str):
-    if not interaction.user.guild_permissions.administrator:
-        return await interaction.response.send_message("❌ You need administrator permissions to use this.", ephemeral=True)
+    if interaction.user.id not in ALLOWED_USERS:
+        return await interaction.response.send_message("You are not allowed to use this.", ephemeral=True)
     for channel in interaction.guild.text_channels:
         try:
-            await channel.send(f"📢 Announcement:\n{message}")
-            break
+            await channel.send(f"📢 {message}")
         except:
             continue
-    await interaction.response.send_message("✅ Announcement sent!", ephemeral=True)
+    await interaction.response.send_message("✅ Announcement sent to all text channels.", ephemeral=True)
 
+bot.tree.add_command(ban)
+bot.tree.add_command(kick)
+bot.tree.add_command(mute)
+bot.tree.add_command(unmute)
+bot.tree.add_command(clear)
 bot.tree.add_command(announce)
 
-# --- Ticket System ---
-
-tickets = {}
+# --- Tickets ---
 
 class TicketView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-
     @discord.ui.button(label="Create Ticket", style=discord.ButtonStyle.green, custom_id="create_ticket")
     async def create_ticket(self, button: discord.ui.Button, interaction: discord.Interaction):
         if not feature_status.get("tickets", False):
-            return await interaction.response.send_message("🎟️ Ticket system is disabled.", ephemeral=True)
-
-        guild = interaction.guild
+            return await interaction.response.send_message("❌ Tickets are disabled.", ephemeral=True)
         overwrites = {
-            guild.default_role: discord.PermissionOverwrite(read_messages=False),
+            interaction.guild.default_role: discord.PermissionOverwrite(read_messages=False),
             interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+            interaction.guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True),
         }
-        channel_name = f"ticket-{interaction.user.name}"
-        existing_channel = discord.utils.get(guild.channels, name=channel_name)
-        if existing_channel:
-            return await interaction.response.send_message("❗ You already have a ticket open.", ephemeral=True)
+        channel = await interaction.guild.create_text_channel(name=f"ticket-{interaction.user.name}", overwrites=overwrites)
+        await channel.send(f"{interaction.user.mention}, thanks for opening a ticket!")
+        await interaction.response.send_message(f"✅ Ticket created: {channel.mention}", ephemeral=True)
 
-        ticket_channel = await guild.create_text_channel(channel_name, overwrites=overwrites)
-        await ticket_channel.send(f"{interaction.user.mention} Thank you for creating a ticket. How can we help?")
-        await interaction.response.send_message(f"✅ Ticket created: {ticket_channel.mention}", ephemeral=True)
-# --- Close Ticket Command ---
-
-@bot.command(name="close")
-async def close_ticket(ctx):
+@bot.command()
+async def close(ctx):
     if not ctx.channel.name.startswith("ticket-"):
         return await ctx.send("❌ This is not a ticket channel.")
-    await ctx.send("📌 Ticket will be closed in 5 seconds.")
+    await ctx.send("🛑 Closing ticket in 5 seconds...")
     await asyncio.sleep(5)
     await ctx.channel.delete()
 
-# --- Help Command ---
-
-@bot.command(name="help")
-async def help_command(ctx):
+@bot.command()
+async def help(ctx):
     embed = discord.Embed(title="📘 Help - All Commands", color=discord.Color.blurple())
     embed.add_field(name="🔧 Moderation", value="`/ban`, `/kick`, `/mute`, `/unmute`, `/clear`", inline=False)
     embed.add_field(name="🎟️ Tickets", value="`!close`", inline=False)
     embed.add_field(name="🛠️ Utility", value="`/announce`, `!setmaintmsg`, `!setrules`, `!rules`", inline=False)
     embed.add_field(name="⚙️ Owner Only", value="`!setmaintmsg`, `!setrules`", inline=False)
-    embed.add_field(name="💡 Note", value="Slash commands must be typed using `/`, not `!`.", inline=False)
     embed.set_footer(text="Made by AASHIRWADGAMINGXD")
     await ctx.send(embed=embed)
 
-# --- Error Handler ---
+# --- Maintenance Custom Message ---
+
+@bot.command()
+async def setmaintmsg(ctx, *, message: str):
+    if ctx.author.id in ALLOWED_USERS:
+        global maintenance_message
+        maintenance_message = message
+        await ctx.send("✅ Maintenance message updated.")
+    else:
+        await ctx.send("❌ You are not allowed to use this.")
+
+# --- Rules ---
+
+rules_message = "No rules have been set yet."
+
+@bot.command()
+async def setrules(ctx, *, message: str):
+    global rules_message
+    if ctx.author.id in ALLOWED_USERS:
+        rules_message = message
+        await ctx.send("✅ Rules updated.")
+    else:
+        await ctx.send("❌ You are not allowed to set rules.")
+
+@bot.command()
+async def rules(ctx):
+    await ctx.send(f"📜 {rules_message}")
+
+# --- Slash Command Force Sync (Optional) ---
+
+@bot.command()
+@commands.is_owner()
+async def sync(ctx):
+    synced = await bot.tree.sync()
+    await ctx.send(f"✅ Synced {len(synced)} slash commands.")
+
+# --- Error Handling ---
 
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.MissingPermissions):
         await ctx.send("❌ You don't have permission to use this command.")
+    elif isinstance(error, commands.CommandNotFound):
+        await ctx.send("❌ Unknown command. Try `!help`.")
     elif isinstance(error, commands.MissingRequiredArgument):
         await ctx.send("❗ Missing required argument.")
-    elif isinstance(error, commands.CommandNotFound):
-        await ctx.send("❌ Unknown command. Use `!help` to see available commands.")
-    elif isinstance(error, commands.NotOwner):
-        await ctx.send("❌ This command is owner-only.")
     else:
-        await ctx.send("⚠️ An unexpected error occurred.")
-        print(f"Error in command {ctx.command}: {error}")
+        await ctx.send("⚠️ Something went wrong.")
+        print(error)
 
-# --- Run the Bot ---
+# --- Start Bot ---
 
-import os
 from dotenv import load_dotenv
 load_dotenv()
 
-TOKEN = os.getenv("TOKEN")  # Use your .env for security or hardcode if testing
-
-if not TOKEN:
-    print("❌ Bot token not found in environment.")
-else:
+TOKEN = os.getenv("TOKEN")
+if TOKEN:
     bot.run(TOKEN)
+else:
+    print("❌ No token provided.")
