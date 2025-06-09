@@ -4,6 +4,7 @@ from discord.ext import commands
 from discord.utils import get
 import json
 import asyncio
+import os
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -14,7 +15,9 @@ FRIEND_ID = 1244871880012206161
 ALLOWED_USERS = [OWNER_ID, FRIEND_ID]
 
 FEATURES_FILE = "features.json"
+RULES_FILE = "rules.json"
 feature_status = {}
+rules_data = {}
 
 default_features = {
     "welcome": True,
@@ -25,6 +28,7 @@ default_features = {
     "utility_tools": True,
     "anime": True,
     "tickets": True,
+    "maintenance_message": "🚧 The bot is under maintenance. Please try again later."
 }
 
 def load_json(file, default):
@@ -39,6 +43,7 @@ def save_json(file, data):
         json.dump(data, f, indent=4)
 
 feature_status = load_json(FEATURES_FILE, default_features)
+rules_data = load_json(RULES_FILE, {"rules": "No rules set yet."})
 
 @bot.event
 async def on_ready():
@@ -48,7 +53,7 @@ async def on_ready():
         await bot.tree.sync()
         print("✅ Slash commands synced.")
     except Exception as e:
-        print(f"Failed to sync slash commands: {e}")
+        print(f"❌ Failed to sync slash commands: {e}")
 
 @bot.event
 async def on_member_join(member):
@@ -61,10 +66,15 @@ async def on_member_join(member):
 async def on_message(message):
     if message.author.bot:
         return
+
     if feature_status.get("maintenance", False) and message.author.id not in ALLOWED_USERS:
+        try:
+            await message.channel.send(feature_status.get("maintenance_message", "🚧 Maintenance mode is on."))
+        except:
+            pass
         return
+
     bad_words = ["teri maa ki", "bsk", "mck", "lund", "bsp", "bc", "mc", "bsdk", "madarchod", "bhosdike", "https://discord.gg"]
-    vc_bad_words = ["https://discord.gg"]
     if feature_status.get("auto_moderation", False):
         msg = message.content.lower()
         for bad_word in bad_words:
@@ -75,25 +85,16 @@ async def on_message(message):
                 except:
                     pass
                 return
-        if message.channel.type == discord.ChannelType.voice:
-            for bad_word in vc_bad_words:
-                if bad_word in msg:
-                    try:
-                        await message.delete()
-                        await message.channel.send(f"🚫 {message.author.mention}, abusive language in VC not allowed.")
-                    except:
-                        pass
-                    return
-    await bot.process_commands(message)
 
-# --- Moderation commands ---
+    await bot.process_commands(message)
+# --- Moderation Commands ---
 
 @app_commands.checks.has_permissions(ban_members=True)
 @app_commands.command(name="ban", description="Ban a user")
 @app_commands.describe(user="User to ban", reason="Reason for ban")
 async def ban(interaction: discord.Interaction, user: discord.Member, reason: str = "No reason provided"):
     if feature_status.get("maintenance", False):
-        return await interaction.response.send_message("Bot is in maintenance.", ephemeral=True)
+        return await interaction.response.send_message(feature_status["maintenance_message"], ephemeral=True)
     await user.ban(reason=reason)
     await interaction.response.send_message(f"🔨 Banned {user} | Reason: {reason}")
 
@@ -102,7 +103,7 @@ async def ban(interaction: discord.Interaction, user: discord.Member, reason: st
 @app_commands.describe(user="User to kick", reason="Reason for kick")
 async def kick(interaction: discord.Interaction, user: discord.Member, reason: str = "No reason provided"):
     if feature_status.get("maintenance", False):
-        return await interaction.response.send_message("Bot is in maintenance.", ephemeral=True)
+        return await interaction.response.send_message(feature_status["maintenance_message"], ephemeral=True)
     await user.kick(reason=reason)
     await interaction.response.send_message(f"👢 Kicked {user} | Reason: {reason}")
 
@@ -111,7 +112,7 @@ async def kick(interaction: discord.Interaction, user: discord.Member, reason: s
 @app_commands.describe(user="User to mute")
 async def mute(interaction: discord.Interaction, user: discord.Member):
     if feature_status.get("maintenance", False):
-        return await interaction.response.send_message("Bot is in maintenance.", ephemeral=True)
+        return await interaction.response.send_message(feature_status["maintenance_message"], ephemeral=True)
     muted_role = get(interaction.guild.roles, name="Muted")
     if not muted_role:
         muted_role = await interaction.guild.create_role(name="Muted")
@@ -140,19 +141,58 @@ async def clear(interaction: discord.Interaction, amount: int):
     deleted = await interaction.channel.purge(limit=amount)
     await interaction.response.send_message(f"🧹 Deleted {len(deleted)} messages.", ephemeral=True)
 
-# --- Ticket system ---
+# --- Text Command: Set & Show Rules ---
+
+@bot.command(name="setrules")
+@commands.is_owner()
+async def set_rules(ctx, *, rules: str):
+    rules_data["rules"] = rules
+    save_json(RULES_FILE, rules_data)
+    await ctx.send("✅ Rules have been updated.")
+
+@bot.command(name="rules")
+async def show_rules(ctx):
+    await ctx.send(f"📜 Server Rules:\n{rules_data.get('rules', 'No rules set.')}")
+
+# --- Text Command: Set Maintenance Message ---
+
+@bot.command(name="setmaintmsg")
+@commands.is_owner()
+async def set_maint_msg(ctx, *, message: str):
+    feature_status["maintenance_message"] = message
+    save_json(FEATURES_FILE, feature_status)
+    await ctx.send("✅ Maintenance message updated.")
+
+# --- Slash Command: Announce ---
+
+@app_commands.command(name="announce", description="Make a server-wide announcement")
+@app_commands.describe(message="The announcement message")
+async def announce(interaction: discord.Interaction, message: str):
+    if not interaction.user.guild_permissions.administrator:
+        return await interaction.response.send_message("❌ You need administrator permissions to use this.", ephemeral=True)
+    for channel in interaction.guild.text_channels:
+        try:
+            await channel.send(f"📢 Announcement:\n{message}")
+            break
+        except:
+            continue
+    await interaction.response.send_message("✅ Announcement sent!", ephemeral=True)
+
+bot.tree.add_command(announce)
+
+# --- Ticket System ---
 
 tickets = {}
 
 class TicketView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
-        self.add_item(discord.ui.Button(label="Create Ticket", style=discord.ButtonStyle.green, custom_id="create_ticket"))
 
     @discord.ui.button(label="Create Ticket", style=discord.ButtonStyle.green, custom_id="create_ticket")
     async def create_ticket(self, button: discord.ui.Button, interaction: discord.Interaction):
         if not feature_status.get("tickets", False):
-            return await interaction.response.send_message("Ticket system is disabled.", ephemeral=True)
+            return await interaction.response.send_message("🎟️ Ticket system is disabled.", ephemeral=True)
+
         guild = interaction.guild
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
@@ -160,212 +200,61 @@ class TicketView(discord.ui.View):
             guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True),
         }
         channel_name = f"ticket-{interaction.user.name}"
-        existing = get(guild.channels, name=channel_name)
-        if existing:
-            return await interaction.response.send_message(f"You already have an open ticket: {existing.mention}", ephemeral=True)
-        channel = await guild.create_text_channel(channel_name, overwrites=overwrites, topic=f"Ticket for {interaction.user}")
-        tickets[str(channel.id)] = str(interaction.user.id)
-        await interaction.response.send_message(f"🎫 Ticket created: {channel.mention}", ephemeral=True)
+        existing_channel = discord.utils.get(guild.channels, name=channel_name)
+        if existing_channel:
+            return await interaction.response.send_message("❗ You already have a ticket open.", ephemeral=True)
 
-@app_commands.command(name="ticket", description="Manage tickets")
-@app_commands.describe(action="Create or close a ticket")
-async def ticket(interaction: discord.Interaction, action: str):
-    if feature_status.get("maintenance", False):
-        return await interaction.response.send_message("Bot is in maintenance.", ephemeral=True)
-    if not feature_status.get("tickets", False):
-        return await interaction.response.send_message("Ticket system is disabled.", ephemeral=True)
-    action = action.lower()
-    if action == "create":
-        view = TicketView()
-        await interaction.response.send_message("Click below to create a ticket.", view=view, ephemeral=True)
-    elif action == "close":
-        channel_id = str(interaction.channel.id)
-        if channel_id in tickets and tickets[channel_id] == str(interaction.user.id):
-            del tickets[channel_id]
-            await interaction.channel.delete()
-        else:
-            await interaction.response.send_message("This is not your ticket or no ticket found here.", ephemeral=True)
-    else:
-        await interaction.response.send_message("Invalid action. Use create or close.", ephemeral=True)
+        ticket_channel = await guild.create_text_channel(channel_name, overwrites=overwrites)
+        await ticket_channel.send(f"{interaction.user.mention} Thank you for creating a ticket. How can we help?")
+        await interaction.response.send_message(f"✅ Ticket created: {ticket_channel.mention}", ephemeral=True)
+# --- Close Ticket Command ---
 
-# --- Dashboard ---
+@bot.command(name="close")
+async def close_ticket(ctx):
+    if not ctx.channel.name.startswith("ticket-"):
+        return await ctx.send("❌ This is not a ticket channel.")
+    await ctx.send("📌 Ticket will be closed in 5 seconds.")
+    await asyncio.sleep(5)
+    await ctx.channel.delete()
 
-class DashboardView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-        for feat in feature_status:
-            self.add_item(FeatureToggleButton(feat))
+# --- Help Command ---
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id not in ALLOWED_USERS:
-            await interaction.response.send_message("You can't use this dashboard.", ephemeral=True)
-            return False
-        return True
+@bot.command(name="help")
+async def help_command(ctx):
+    embed = discord.Embed(title="📘 Help - All Commands", color=discord.Color.blurple())
+    embed.add_field(name="🔧 Moderation", value="`/ban`, `/kick`, `/mute`, `/unmute`, `/clear`", inline=False)
+    embed.add_field(name="🎟️ Tickets", value="`!close`", inline=False)
+    embed.add_field(name="🛠️ Utility", value="`/announce`, `!setmaintmsg`, `!setrules`, `!rules`", inline=False)
+    embed.add_field(name="⚙️ Owner Only", value="`!setmaintmsg`, `!setrules`", inline=False)
+    embed.add_field(name="💡 Note", value="Slash commands must be typed using `/`, not `!`.", inline=False)
+    embed.set_footer(text="Made by AASHIRWADGAMINGXD")
+    await ctx.send(embed=embed)
 
-class FeatureToggleButton(discord.ui.Button):
-    def __init__(self, feature_name):
-        status = feature_status.get(feature_name, False)
-        super().__init__(
-            label=f"{feature_name.capitalize()} [{'ON' if status else 'OFF'}]",
-            style=discord.ButtonStyle.green if status else discord.ButtonStyle.red,
-            custom_id=feature_name,
-        )
-
-    async def callback(self, interaction: discord.Interaction):
-        feat = self.custom_id
-        feature_status[feat] = not feature_status[feat]
-        save_json(FEATURES_FILE, feature_status)
-        self.label = f"{feat.capitalize()} [{'ON' if feature_status[feat] else 'OFF'}]"
-        self.style = discord.ButtonStyle.green if feature_status[feat] else discord.ButtonStyle.red
-        await interaction.response.edit_message(view=self.view)
-
-@app_commands.command(name="dashboard", description="Owner-only feature toggle dashboard")
-async def dashboard(interaction: discord.Interaction):
-    if interaction.user.id not in ALLOWED_USERS:
-        return await interaction.response.send_message("You can't use this dashboard.", ephemeral=True)
-    view = DashboardView()
-    await interaction.response.send_message("Feature toggle dashboard:", view=view, ephemeral=True)
-
-# --- Anime role ---
-
-@app_commands.command(name="anime", description="Get Anime role")
-async def anime(interaction: discord.Interaction):
-    if not feature_status.get("anime", False):
-        return await interaction.response.send_message("Anime feature is disabled.", ephemeral=True)
-    role = get(interaction.guild.roles, name="Anime")
-    if not role:
-        role = await interaction.guild.create_role(name="Anime")
-    if role in interaction.user.roles:
-        await interaction.response.send_message("You already have the Anime role.", ephemeral=True)
-    else:
-        await interaction.user.add_roles(role)
-        await interaction.response.send_message("Anime role added!", ephemeral=True)
-
-# --- Reaction Role Management ---
-
-reaction_roles = {}  # {message_id: {emoji: role_id}}
-
-REACTION_ROLES_FILE = "reaction_roles.json"
-
-def load_reaction_roles():
-    global reaction_roles
-    try:
-        with open(REACTION_ROLES_FILE, "r") as f:
-            reaction_roles = json.load(f)
-    except:
-        reaction_roles = {}
-
-def save_reaction_roles():
-    with open(REACTION_ROLES_FILE, "w") as f:
-        json.dump(reaction_roles, f, indent=4)
-
-load_reaction_roles()
-
-@app_commands.checks.has_permissions(manage_roles=True)
-@app_commands.command(name="reactionrole_add", description="Add reaction role to a message")
-@app_commands.describe(message_id="Message ID to attach reaction role", emoji="Emoji for reaction", role="Role to assign")
-async def reactionrole_add(interaction: discord.Interaction, message_id: str, emoji: str, role: discord.Role):
-    if not feature_status.get("reaction_roles", False):
-        return await interaction.response.send_message("Reaction roles feature is disabled.", ephemeral=True)
-    try:
-        channel = interaction.channel
-        message = await channel.fetch_message(int(message_id))
-    except Exception:
-        return await interaction.response.send_message("Message not found in this channel.", ephemeral=True)
-
-    # Add reaction to message
-    try:
-        await message.add_reaction(emoji)
-    except Exception as e:
-        return await interaction.response.send_message(f"Failed to add reaction: {e}", ephemeral=True)
-
-    # Save reaction role mapping
-    str_msg_id = str(message.id)
-    if str_msg_id not in reaction_roles:
-        reaction_roles[str_msg_id] = {}
-    reaction_roles[str_msg_id][emoji] = role.id
-    save_reaction_roles()
-
-    await interaction.response.send_message(f"Reaction role set: React with {emoji} to get the {role.name} role.")
-
-@app_commands.checks.has_permissions(manage_roles=True)
-@app_commands.command(name="reactionrole_remove", description="Remove reaction role from a message")
-@app_commands.describe(message_id="Message ID", emoji="Emoji to remove")
-async def reactionrole_remove(interaction: discord.Interaction, message_id: str, emoji: str):
-    if not feature_status.get("reaction_roles", False):
-        return await interaction.response.send_message("Reaction roles feature is disabled.", ephemeral=True)
-
-    str_msg_id = str(message_id)
-    if str_msg_id not in reaction_roles or emoji not in reaction_roles[str_msg_id]:
-        return await interaction.response.send_message("That reaction role mapping does not exist.", ephemeral=True)
-
-    del reaction_roles[str_msg_id][emoji]
-    if not reaction_roles[str_msg_id]:
-        del reaction_roles[str_msg_id]
-    save_reaction_roles()
-
-    await interaction.response.send_message(f"Removed reaction role for {emoji} on message {message_id}.")
+# --- Error Handler ---
 
 @bot.event
-async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
-    if feature_status.get("maintenance", False):
-        return
-    if not feature_status.get("reaction_roles", False):
-        return
-    if payload.user_id == bot.user.id:
-        return
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send("❌ You don't have permission to use this command.")
+    elif isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send("❗ Missing required argument.")
+    elif isinstance(error, commands.CommandNotFound):
+        await ctx.send("❌ Unknown command. Use `!help` to see available commands.")
+    elif isinstance(error, commands.NotOwner):
+        await ctx.send("❌ This command is owner-only.")
+    else:
+        await ctx.send("⚠️ An unexpected error occurred.")
+        print(f"Error in command {ctx.command}: {error}")
 
-    str_msg_id = str(payload.message_id)
-    if str_msg_id in reaction_roles:
-        emoji = str(payload.emoji)
-        if emoji in reaction_roles[str_msg_id]:
-            guild = bot.get_guild(payload.guild_id)
-            if guild:
-                role_id = reaction_roles[str_msg_id][emoji]
-                role = guild.get_role(role_id)
-                member = guild.get_member(payload.user_id)
-                if role and member:
-                    try:
-                        await member.add_roles(role)
-                    except:
-                        pass
+# --- Run the Bot ---
 
-@bot.event
-async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
-    if feature_status.get("maintenance", False):
-        return
-    if not feature_status.get("reaction_roles", False):
-        return
-    if payload.user_id == bot.user.id:
-        return
-
-    str_msg_id = str(payload.message_id)
-    if str_msg_id in reaction_roles:
-        emoji = str(payload.emoji)
-        if emoji in reaction_roles[str_msg_id]:
-            guild = bot.get_guild(payload.guild_id)
-            if guild:
-                role_id = reaction_roles[str_msg_id][emoji]
-                role = guild.get_role(role_id)
-                member = guild.get_member(payload.user_id)
-                if role and member:
-                    try:
-                        await member.remove_roles(role)
-                    except:
-                        pass
-
-# Run the bot
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
-bot.tree.add_command(ban)
-bot.tree.add_command(kick)
-bot.tree.add_command(mute)
-bot.tree.add_command(unmute)
-bot.tree.add_command(clear)
-bot.tree.add_command(ticket)
-bot.tree.add_command(dashboard)
-bot.tree.add_command(anime)
-bot.tree.add_command(reactionrole_add)
-bot.tree.add_command(reactionrole_remove)
+TOKEN = os.getenv("TOKEN")  # Use your .env for security or hardcode if testing
 
-bot.run(os.getenv("TOKEN"))
+if not TOKEN:
+    print("❌ Bot token not found in environment.")
+else:
+    bot.run(TOKEN)
