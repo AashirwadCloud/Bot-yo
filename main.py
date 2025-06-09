@@ -78,8 +78,8 @@ class Maintenance(commands.Cog):
 
         maintenance_mode = not maintenance_mode
         await bot.change_presence(
-            status=discord.Status.dnd if maintenance_mode else discord.Status.online,
-            activity=discord.Game("Under maintenance" if maintenance_mode else "Moderating")
+            status=discord.Status.dnd
+            activity=discord.Game("Bot is Under maintenance" if maintenance_mode else "Moderating")
         )
         await interaction.response.send_message(f"🔧 Maintenance mode is now {'ON' if maintenance_mode else 'OFF'}.")
 
