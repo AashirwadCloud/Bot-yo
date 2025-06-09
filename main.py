@@ -242,9 +242,6 @@ async def on_command_error(ctx, error):
 
 # --- Start Bot ---
 
-from dotenv import load_dotenv
-load_dotenv()
-
 TOKEN = os.getenv("TOKEN")
 if TOKEN:
     bot.run(TOKEN)
