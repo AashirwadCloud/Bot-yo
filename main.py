@@ -11,7 +11,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # CONFIGURATION
 # ===============================
 DATA_FILE = "bot_data.json"
-BOT_OWNER_ID = 1217747285463531522  # Replace with your ID
+BOT_OWNER_ID = 1217747285463531522 
 
 # ===============================
 # INITIAL LOAD / SAVE
