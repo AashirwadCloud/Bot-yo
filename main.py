@@ -1,11 +1,12 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import random
 import os
 import yt_dlp
 import asyncio
 from pytube import YouTube
 import json
+import minecraft_server_util as mc_util
 
 # Bot configuration
 intents = discord.Intents.default()
@@ -16,14 +17,17 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 # Constants
 TICKET_FILE = '/app/data/tickets.json'
+COOKIES_FILE = '/app/data/cookies.txt'
+MC_CONFIG_FILE = '/app/data/mc_config.json'
 RESTRICTED_ROLE_NAMES = ['india army', 'pakistan army', 'badword1', 'badword2', 'offensive term']
 YOUR_REACTION_MESSAGE_ID = 0  # Replace with actual message ID
 YOUR_ROLE_ID = 0  # Replace with actual role ID
 
-# Music queue
+# Music queue and Minecraft server status
 music_queues = {}
+mc_statuses = {}  # Tracks server status per guild: {"<guild_id>": {"online": bool, "last_checked": timestamp}}
 
-# File handling for tickets
+# File handling for tickets and Minecraft config
 def load_tickets():
     if not os.path.exists(TICKET_FILE):
         return {}
@@ -34,17 +38,30 @@ def save_tickets(data):
     with open(TICKET_FILE, 'w') as f:
         json.dump(data, f, indent=4)
 
+def load_mc_config():
+    if not os.path.exists(MC_CONFIG_FILE):
+        return {}
+    with open(MC_CONFIG_FILE, 'r') as f:
+        return json.load(f)
+
+def save_mc_config(data):
+    with open(MC_CONFIG_FILE, 'w') as f:
+        json.dump(data, f, indent=4)
+
 # Bot events
 @bot.event
 async def on_ready():
     os.makedirs('/app/data', exist_ok=True)
     if not os.path.exists(TICKET_FILE):
         save_tickets({})
+    if not os.path.exists(MC_CONFIG_FILE):
+        save_mc_config({})
     print(f'Logged in as {bot.user.name} at {discord.utils.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")}')
     await bot.change_presence(
         status=discord.Status.dnd,
         activity=discord.Game(name="Made by AashirwadGamingXD")
     )
+    check_mc_status.start()
 
 @bot.event
 async def on_member_join(member):
@@ -127,7 +144,74 @@ async def create_ticket_channel(member, guild):
     await channel.send(embed=embed, view=view)
     await channel.send(f'{member.mention}, your ticket has been created!')
 
+# Minecraft server status monitoring
+@tasks.loop(seconds=30)
+async def check_mc_status():
+    mc_config = load_mc_config()
+    for guild_id, config in mc_config.items():
+        guild = bot.get_guild(int(guild_id))
+        if not guild:
+            continue
+        channel = guild.get_channel(int(config['channel_id']))
+        if not channel:
+            continue
+        ip = config['ip']
+        port = config['port']
+        
+        try:
+            status = await mc_util.status(ip, port, timeout=5)
+            is_online = True
+            current_status = mc_statuses.get(guild_id, {}).get('online', None)
+            if current_status is False or current_status is None:
+                embed = discord.Embed(
+                    title="Minecraft Server Status",
+                    description="Server is online",
+                    color=discord.Color.green(),
+                    timestamp=discord.utils.utcnow()
+                )
+                embed.add_field(name="IP", value=ip, inline=True)
+                embed.add_field(name="Port", value=port, inline=True)
+                embed.add_field(name="Players", value=f"{status.players.online}/{status.players.max}", inline=True)
+                embed.add_field(name="Version", value=status.version.name, inline=True)
+                embed.add_field(name="MOTD", value=status.motd, inline=False)
+                await channel.send(embed=embed)
+            mc_statuses[guild_id] = {'online': True, 'last_checked': discord.utils.utcnow().timestamp()}
+        except Exception:
+            is_online = False
+            current_status = mc_statuses.get(guild_id, {}).get('online', None)
+            if current_status is True:
+                embed = discord.Embed(
+                    title="Minecraft Server Status",
+                    description="Server is offline",
+                    color=discord.Color.red(),
+                    timestamp=discord.utils.utcnow()
+                )
+                embed.add_field(name="IP", value=ip, inline=True)
+                embed.add_field(name="Port", value=port, inline=True)
+                await channel.send(embed=embed)
+            mc_statuses[guild_id] = {'online': False, 'last_checked': discord.utils.utcnow().timestamp()}
+
 # Commands
+@bot.hybrid_command(description="Set up Minecraft server status monitoring")
+@commands.has_permissions(manage_channels=True)
+async def mcsetup(ctx, ip: str, port: int = 25565, channel: discord.TextChannel = None):
+    channel = channel or ctx.channel
+    mc_config = load_mc_config()
+    mc_config[str(ctx.guild.id)] = {
+        'ip': ip,
+        'port': port,
+        'channel_id': str(channel.id)
+    }
+    save_mc_config(mc_config)
+    embed = discord.Embed(
+        title="Minecraft Server Monitoring Setup",
+        description=f"Monitoring set for {ip}:{port}. Status updates will be sent to {channel.mention}.",
+        color=discord.Color.blue(),
+        timestamp=discord.utils.utcnow()
+    )
+    await ctx.send(embed=embed)
+    await check_mc_status()  # Run an immediate check
+
 @bot.hybrid_command(description="Check bot latency")
 async def ping(ctx):
     await ctx.send(f'Pong! {round(bot.latency * 1000)}ms')
@@ -226,7 +310,7 @@ ytdl_format_options = {
     'no_warnings': True,
     'default_search': 'auto',
     'source_address': '0.0.0.0',
-    'cookiefile': '/app/data/cookies.txt'  # Path to cookies file
+    'cookiefile': COOKIES_FILE
 }
 
 ffmpeg_options = {'options': '-vn'}
@@ -328,6 +412,13 @@ async def on_command_error(ctx, error):
         await ctx.send(f"An error occurred while executing the command: {error.original}")
     else:
         await ctx.send(f"An error occurred: {error}")
+
+# Temporary sync command
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def sync(ctx):
+    await bot.tree.sync()
+    await ctx.send("Slash commands synced!")
 
 # Run bot
 bot.run(os.getenv('TOKEN'))
