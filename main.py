@@ -58,7 +58,7 @@ async def on_ready():
         save_mc_config({})
     print(f'Logged in as {bot.user.name} at {discord.utils.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")}')
     await bot.change_presence(
-        status=discord.Status.dnd,
+        status=discord.Status.online,
         activity=discord.Game(name="Made by AashirwadGamingXD")
     )
     check_mc_status.start()
